@@ -1,0 +1,283 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                    Int            @id @default(autoincrement())
+  username              String         @unique
+  password              String
+  nombres               String
+  apellidos             String
+  email                 String?        @unique
+  role                  Role
+  status                UserStatus     @default(ACTIVO)
+  areaId                Int?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  auditLogs             AuditLog[]
+  comments              Comment[]
+  equipment             Equipment?
+  assignedInstallations Installation[] @relation("AssignedSupport")
+  createdInstallations  Installation[] @relation("CreatedBy")
+  notifications         Notification[]
+  area                  Area?          @relation(fields: [areaId], references: [id])
+  userPrograms          UserProgram[]
+
+  @@index([role])
+  @@index([areaId])
+  @@index([status])
+}
+
+model Area {
+  id              Int                  @id @default(autoincrement())
+  nombre          String               @unique
+  descripcion     String?
+  estado          Boolean              @default(true)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  equipment       Equipment[]
+  users           User[]
+  programTemplate AreaProgramTemplate?
+}
+
+model Equipment {
+  id               Int             @id @default(autoincrement())
+  codigo           String          @unique
+  hostname         String          @unique
+  ip               String
+  marca            String?
+  modelo           String?
+  numeroSerie      String?
+  sistemaOperativo String?
+  status           EquipmentStatus @default(ACTIVO)
+  ubicacion        String?
+  observaciones    String?
+  userId           Int?            @unique
+  areaId           Int?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  area             Area?           @relation(fields: [areaId], references: [id])
+  user             User?           @relation(fields: [userId], references: [id])
+  installations    Installation[]
+  userPrograms     UserProgram[]
+
+  @@index([ip])
+  @@index([areaId])
+  @@index([status])
+}
+
+model Program {
+  id                   Int                          @id @default(autoincrement())
+  nombre               String                       @unique
+  descripcion          String?
+  version              String?
+  activo               Boolean                      @default(true)
+  createdAt            DateTime                     @default(now())
+  updatedAt            DateTime                     @updatedAt
+  installationPrograms InstallationProgram[]
+  userPrograms         UserProgram[]
+  areaTemplatePrograms AreaProgramTemplateProgram[]
+
+  @@index([activo])
+}
+
+model UserProgram {
+  id            Int        @id @default(autoincrement())
+  userId        Int
+  programId     Int
+  equipmentId   Int?
+  observaciones String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  equipment     Equipment? @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  program       Program    @relation(fields: [programId], references: [id], onDelete: Cascade)
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, programId, equipmentId])
+  @@index([userId])
+  @@index([programId])
+  @@index([equipmentId])
+}
+
+model Installation {
+  id                   Int                   @id @default(autoincrement())
+  codigo               String                @unique
+  type                 InstallationType      @default(INSTALACION)
+  status               InstallationStatus    @default(PENDIENTE)
+  priority             Priority              @default(MEDIA)
+  createdById          Int
+  assignedSupportId    Int?
+  equipmentId          Int
+  assignedAt           DateTime?
+  startedAt            DateTime?
+  completedAt          DateTime?
+  cancelledAt          DateTime?
+  finalComment         String?
+  observaciones        String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  comments             Comment[]
+  assignedSupport      User?                 @relation("AssignedSupport", fields: [assignedSupportId], references: [id])
+  createdBy            User                  @relation("CreatedBy", fields: [createdById], references: [id])
+  equipment            Equipment             @relation(fields: [equipmentId], references: [id])
+  installationPrograms InstallationProgram[]
+
+  @@index([status])
+  @@index([assignedSupportId])
+  @@index([equipmentId])
+  @@index([createdById])
+}
+
+model InstallationProgram {
+  id             Int                       @id @default(autoincrement())
+  installationId Int
+  programId      Int
+  status         InstallationProgramStatus @default(PENDIENTE)
+  installed      Boolean                   @default(false)
+  configured     Boolean                   @default(false)
+  observaciones  String?
+  installedAt    DateTime?
+  configuredAt   DateTime?
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+  installation   Installation              @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  program        Program                   @relation(fields: [programId], references: [id])
+
+  @@unique([installationId, programId])
+  @@index([installationId])
+  @@index([programId])
+  @@index([status])
+}
+
+model Comment {
+  id             Int          @id @default(autoincrement())
+  contenido      String
+  userId         Int
+  installationId Int
+  parentId       Int?
+  leido          Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  installation   Installation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  parent         Comment?     @relation("CommentReplies", fields: [parentId], references: [id])
+  replies        Comment[]    @relation("CommentReplies")
+  user           User         @relation(fields: [userId], references: [id])
+
+  @@index([installationId])
+  @@index([userId])
+  @@index([parentId])
+  @@index([leido])
+}
+
+model Notification {
+  id             Int      @id @default(autoincrement())
+  userId         Int
+  titulo         String
+  mensaje        String
+  tipo           String?
+  installationId Int?
+  leida          Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([leida])
+  @@index([installationId])
+}
+
+model AuditLog {
+  id          Int      @id @default(autoincrement())
+  userId      Int?
+  accion      String
+  entidad     String
+  entidadId   Int?
+  descripcion String?
+  datos       Json?
+  createdAt   DateTime @default(now())
+  user        User?    @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([entidad])
+  @@index([entidadId])
+  @@index([createdAt])
+}
+
+model AreaProgramTemplate {
+  id          Int      @id @default(autoincrement())
+  areaId      Int      @unique
+  descripcion String?
+  activo      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  area     Area                         @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  programs AreaProgramTemplateProgram[]
+
+  @@index([activo])
+}
+
+model AreaProgramTemplateProgram {
+  id         Int      @id @default(autoincrement())
+  templateId Int
+  programId  Int
+  createdAt  DateTime @default(now())
+
+  template AreaProgramTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  program  Program             @relation(fields: [programId], references: [id], onDelete: Restrict)
+
+  @@unique([templateId, programId])
+  @@index([programId])
+}
+
+enum Role {
+  ADMINISTRADOR
+  JEFE
+  SOPORTE
+  INVITADO
+}
+
+enum UserStatus {
+  ACTIVO
+  INACTIVO
+}
+
+enum EquipmentStatus {
+  ACTIVO
+  INACTIVO
+  MANTENIMIENTO
+  BAJA
+}
+
+enum InstallationStatus {
+  PENDIENTE
+  ASIGNADA
+  EN_PROGRESO
+  COMPLETADA
+  CANCELADA
+}
+
+enum InstallationType {
+  INSTALACION
+  REINSTALACION
+  CORRECCION
+  ACTUALIZACION
+}
+
+enum InstallationProgramStatus {
+  PENDIENTE
+  INSTALANDO
+  INSTALADO
+  CONFIGURADO
+}
+
+enum Priority {
+  BAJA
+  MEDIA
+  ALTA
+  URGENTE
+}
